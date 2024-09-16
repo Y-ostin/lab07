@@ -1,22 +1,10 @@
 package com.example.lab07
 
-
 import android.content.Context
 import android.util.Log
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextField
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -27,27 +15,26 @@ import com.example.database.UserDao
 import com.example.database.UserDatabase
 import kotlinx.coroutines.launch
 
-
 @Composable
 fun ScreenUser() {
     val context = LocalContext.current
     var db: UserDatabase
-    var id        by remember { mutableStateOf("") }
+    var id by remember { mutableStateOf("") }
     var firstName by remember { mutableStateOf("") }
-    var lastName  by remember { mutableStateOf("") }
-    var dataUser  = remember { mutableStateOf("") }
+    var lastName by remember { mutableStateOf("") }
+    var dataUser by remember { mutableStateOf(listOf<User>()) }
+    var selectedUsers by remember { mutableStateOf(mutableSetOf<User>()) }
+    var isEditMode by remember { mutableStateOf(false) } // Estado del "Modo Edición"
 
     db = crearDatabase(context)
-
     val dao = db.userDao()
-
     val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
-    ){
+    ) {
         Spacer(Modifier.height(50.dp))
         TextField(
             value = id,
@@ -70,30 +57,81 @@ fun ScreenUser() {
         )
         Button(
             onClick = {
-                val user = User(0,firstName, lastName)
+                val user = User(0, firstName, lastName)
                 coroutineScope.launch {
                     AgregarUsuario(user = user, dao = dao)
+                    dataUser = getUsers(dao)
                 }
                 firstName = ""
                 lastName = ""
             }
         ) {
-            Text("Agregar Usuario", fontSize=16.sp)
+            Text("Agregar Usuario", fontSize = 16.sp)
         }
+        Spacer(Modifier.height(16.dp))
         Button(
             onClick = {
-                val user = User(0,firstName, lastName)
                 coroutineScope.launch {
-                    val data = getUsers( dao = dao)
-                    dataUser.value = data
+                    dataUser = getUsers(dao)
                 }
             }
         ) {
-            Text("Listar Usuarios", fontSize=16.sp)
+            Text("Listar Usuarios", fontSize = 16.sp)
         }
-        Text(
-            text = dataUser.value, fontSize = 20.sp
-        )
+
+        Spacer(Modifier.height(16.dp))
+
+        // Botón para activar/desactivar el "Modo Edición"
+        Button(
+            onClick = {
+                isEditMode = !isEditMode // Alterna el estado del "Modo Edición"
+            }
+        ) {
+            Text(if (isEditMode) "Salir del Modo Edición" else "Modo Edición", fontSize = 16.sp)
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Mostrar usuarios con checkboxes en "Modo Edición"
+        if (dataUser.isNotEmpty()) {
+            dataUser.forEach { user ->
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    if (isEditMode) {
+                        Checkbox(
+                            checked = selectedUsers.contains(user),
+                            onCheckedChange = { isChecked ->
+                                if (isChecked) {
+                                    selectedUsers.add(user)
+                                } else {
+                                    selectedUsers.remove(user)
+                                }
+                            }
+                        )
+                    }
+                    Text(
+                        text = "${user.firstName} ${user.lastName}",
+                        fontSize = 18.sp
+                    )
+                }
+            }
+
+            if (isEditMode) {
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            selectedUsers.forEach { user ->
+                                EliminarUsuario(user, dao)
+                            }
+                            selectedUsers.clear()
+                            dataUser = getUsers(dao)
+                        }
+                    }
+                ) {
+                    Text("Eliminar Usuarios Seleccionados", fontSize = 16.sp)
+                }
+            }
+        }
     }
 }
 
@@ -106,25 +144,22 @@ fun crearDatabase(context: Context): UserDatabase {
     ).build()
 }
 
-suspend fun getUsers(dao: UserDao): String {
-    var rpta: String = ""
-    //LaunchedEffect(Unit) {
-    val users = dao.getAll()
-    users.forEach { user ->
-        val fila = user.firstName + " - " + user.lastName + "\n"
-        rpta += fila
-    }
-    //}
-    return rpta
+suspend fun getUsers(dao: UserDao): List<User> {
+    return dao.getAll()
 }
 
-suspend fun AgregarUsuario(user: User, dao:UserDao): Unit {
-    //LaunchedEffect(Unit) {
+suspend fun AgregarUsuario(user: User, dao: UserDao): Unit {
     try {
         dao.insert(user)
+    } catch (e: Exception) {
+        Log.e("User", "Error: insert: ${e.message}")
     }
-    catch (e: Exception) {
-        Log.e("User","Error: insert: ${e.message}")
+}
+
+suspend fun EliminarUsuario(user: User, dao: UserDao) {
+    try {
+        dao.detele(user)
+    } catch (e: Exception) {
+        Log.e("User", "ERROR: no es posible eliminar el usuario: ${e.message}")
     }
-    //}
 }
