@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             Lab07Theme {
-
+                ScreenUser()
             }
         }
     }
